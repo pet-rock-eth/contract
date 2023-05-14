@@ -1,0 +1,5 @@
+/node_modules/*
+/metadata/*
+/artifacts/*
+/package-lock.json
+/package.json
