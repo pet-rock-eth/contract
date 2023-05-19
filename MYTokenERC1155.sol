@@ -12,7 +12,7 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         _mint(msg.sender,2,1,"");
     }
     uint256 transactionfee = 0.001 ether;
-    mapping (address => uint) allowednumber;
+    mapping (uint => bool) lock;
     event Received(address _sender, uint _value, string _message);
 
     function setURI(string memory newuri) public onlyOwner {
@@ -42,8 +42,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
     }
 
-    function getallowednumber(address from) public view returns(uint){
-        return allowednumber[from];
+    function getlock(uint id) public view returns(bool){
+        return lock[id];
     }
 
     function safeTransferFrom(
@@ -53,11 +53,11 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         uint256 amount,
         bytes memory data
     ) public virtual override{
-        if (getallowednumber(from)>=1){
-            allowednumber[from] = allowednumber[from] - 1;
+        if (lock[id] == true){
+            lock[id] = false;
             super.safeTransferFrom(from, to, id, amount, data);
         }else{
-            revert();
+            revert("your NFT still locked");
         }
     }
 
@@ -68,26 +68,38 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         uint256[] memory amounts,
         bytes memory data
     ) public virtual override {
-        if (getallowednumber(from)>=1){
-            allowednumber[from] = allowednumber[from] - 1;
+        if (checklock(ids)==true){
             super.safeBatchTransferFrom(from, to, ids, amounts, data);
+            locked(ids);
         }else{
             revert();
         }
         
     }
 
-    //增加可交易次數，number為增加之次數
-    function addallowednumber(uint number) public payable{
-        if(allowednumber[msg.sender] + number >= allowednumber[msg.sender]){
-            uint transfernumber = number * transactionfee;
-            allowednumber[msg.sender] += number;
-            emit Received(msg.sender,transfernumber,"the allowed number is update");
+    function checklock (uint[] memory ids) private view returns(bool){
+
+        for(uint256 i = 0 ; i < ids.length ; i++){
+            require(lock[ids[i]] == true,"your NFT still locked");
+        }
+        return true;
+    }
+
+    function locked (uint[] memory ids) private{
+        for(uint256 i = 0 ; i < ids.length ; i++){
+            lock[ids[i]] = false;
         }
     }
 
+    //將NFT解鎖
+    function unlock(uint id) public payable{
+        require(msg.value >= transactionfee,"you're transaction fee didn't enough");
+        lock[id] = true;
+        emit Received(msg.sender,msg.value,"the lock is update");
+        }
+
     //若有人匯入(N)個0.001ETH則增加N次可轉換次數
-    fallback () external payable {          //若msg.data為空則執行fallback
+    /*fallback () external payable {          //若msg.data為空則執行fallback
         if (msg.value >= transactionfee 
         && allowednumber[msg.sender] + (msg.value/transactionfee) > allowednumber[msg.sender]
         ){
@@ -96,10 +108,10 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         }else{
             revert();
         }
-    }
+    }*/
 
     //若有人匯入(N)個0.001ETH則增加N次可轉換次數
-    receive () external payable{          //若msg.data不為空則執行receive
+    /*receive () external payable{          //若msg.data不為空則執行receive
         if (msg.value >= transactionfee 
         && allowednumber[msg.sender] + (msg.value/transactionfee) > allowednumber[msg.sender]
         ){
@@ -108,5 +120,5 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         }else{
             revert();
         }
-    }
+    }*/
 }
