@@ -7,21 +7,23 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-contract MyToken is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
+contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     struct Cat{
         uint id;
         address adopter_address;
         uint adopt_date_timestamp;
         uint256 feed;
         uint256 healthPointPercentage_18digits;
+        bool lock_status; //true is locked, otherwise it free
     }
 
     uint nft_amounts = 1;
-    mapping (uint256 => Cat) private tokenMutableData;
+    uint256 transactionfee = 0.001 ether;
+    mapping (uint256 => Cat) private tokenMutableData; //id:cat
     
     constructor() ERC1155("https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone{id}.json") {
         while( nft_amounts <= 100){
-            Cat memory newcat = Cat(nft_amounts, msg.sender, block.timestamp, 0, 0);
+            Cat memory newcat = Cat(nft_amounts, msg.sender, block.timestamp, 0, 0, false);
             _mint(msg.sender, newcat.id, 1, "cat");
             tokenMutableData[nft_amounts] = newcat;
             newcat.healthPointPercentage_18digits = get_health_point_percentage_or_burn(nft_amounts);
@@ -49,16 +51,54 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
     }
 
     // The following functions are overrides required by Solidity.
-    function _beforeTokenTransfer(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
-        internal 
-        override(ERC1155, ERC1155Supply)
-    {
-        require(to != address(0), "The address from reciever not exist!");   
-        require(ids.length == amounts.length, "The length of IDs and amounts arrays must match!");
-        for (uint256 i = 1; i < ids.length; i++) {
-            require(balanceOf(from, ids[i]) == 1, "Insufficient balance for token ID");
+            
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) public virtual override{
+        require(balanceOf(from, id) == 1, "Insufficient balance for token ID");
+        if (tokenMutableData[id].lock_status == false){
+            tokenMutableData[id].lock_status = true;
+            super.safeTransferFrom(from, to, id, amount, data);
+        }else{
+            revert("your NFT still locked");
         }
-        super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
+    }
+    
+    function check_batch_lock (uint[] memory ids, bool status) private view returns(bool){
+
+        for(uint256 i = 0 ; i < ids.length ; i++){
+            require(tokenMutableData[ids[i]].lock_status == status,"your NFT status isn't correct.");
+        }
+        return true;
+    }
+
+    function set_batch_lock (uint[] memory ids, bool lock_status) private{
+        for(uint256 i = 0 ; i < ids.length ; i++){
+            tokenMutableData[ids[i]].lock_status = lock_status;
+        }
+    }
+
+    function unlock_payment(uint id) public payable{
+        address payable recipient = payable(owner()); // Get the address and cast it to payable
+        require(msg.value >= transactionfee, "Insufficient bid.");
+        require(recipient.send(msg.value)); // Problematic part: Transfer value
+        tokenMutableData[id].lock_status == false;
+    }
+
+    function unlock_transfer( address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data)
+        public returns(bool result) {
+            unlock_payment(id);
+            require(tokenMutableData[id].lock_status == false, "false while unlock the payment");
+            safeTransferFrom(from, to, id, amount, data); //transfer
+            return tokenMutableData[id].lock_status;
     }
 
     function uri(uint256 id) override public view returns (string memory) {
