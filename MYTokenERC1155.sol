@@ -11,8 +11,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         _mint(msg.sender,1,1,"");
         _mint(msg.sender,2,1,"");
     }
-    uint256 transactionfee = 0.001 ether;
-    mapping (uint => bool) lock;
+    uint256 transactionfee = 0.001 ether;   //手續費標準
+    mapping (uint => bool) lock;    //買賣石頭的鎖
     event Received(address _sender, uint _value, string _message);
 
     function setURI(string memory newuri) public onlyOwner {
@@ -24,6 +24,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         onlyOwner
     {
         _mint(account, id, amount, data);
+        lock[id] = false;
+        owner[id] = account;
     }
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
@@ -42,6 +44,7 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
     }
 
+    //獲取ID對應的鎖的狀態
     function getlock(uint id) public view returns(bool){
         return lock[id];
     }
@@ -54,8 +57,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         bytes memory data
     ) public virtual override{
         if (lock[id] == true){
-            lock[id] = false;
             super.safeTransferFrom(from, to, id, amount, data);
+            lock[id] = false;
         }else{
             revert("your NFT still locked");
         }
@@ -72,12 +75,13 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
             super.safeBatchTransferFrom(from, to, ids, amounts, data);
             locked(ids);
         }else{
-            revert();
+            revert("you have NFT still locked");
         }
         
     }
 
-    function checklock (uint[] memory ids) private view returns(bool){
+    //大量檢查鎖的狀況
+    function checklock (uint[] memory ids) public view returns(bool){
 
         for(uint256 i = 0 ; i < ids.length ; i++){
             require(lock[ids[i]] == true,"your NFT still locked");
@@ -85,7 +89,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
         return true;
     }
 
-    function locked (uint[] memory ids) private{
+    //將NFT上鎖
+    function locked (uint[] memory ids) public{
         for(uint256 i = 0 ; i < ids.length ; i++){
             lock[ids[i]] = false;
         }
@@ -94,8 +99,8 @@ contract MyTokenERC1155 is ERC1155, Ownable, ERC1155Burnable, ERC1155Supply {
     //將NFT解鎖
     function unlock(uint id) public payable{
         require(msg.value >= transactionfee,"you're transaction fee didn't enough");
-        lock[id] = true;
         emit Received(msg.sender,msg.value,"the lock is update");
+        lock[id] = true;
         }
 
     //若有人匯入(N)個0.001ETH則增加N次可轉換次數
