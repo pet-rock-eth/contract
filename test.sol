@@ -17,30 +17,25 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         bool lock_status; //true is locked, otherwise it free
     }
 
-    uint nft_amounts = 1;
     uint256 transactionfee = 0.001 ether;
     mapping (uint256 => Cat) private tokenMutableData; //id:cat
-    
+    event Received(address _sender, uint _value, string _message);
+
     constructor() ERC1155("https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone{id}.json") {
-        while( nft_amounts <= 100){
-            Cat memory newcat = Cat(nft_amounts, msg.sender, block.timestamp, 0, 0, false);
-            _mint(msg.sender, newcat.id, 1, "cat");
-            tokenMutableData[nft_amounts] = newcat;
-            newcat.healthPointPercentage_18digits = get_health_point_percentage_or_burn(nft_amounts);
-            nft_amounts++;
-        }
-        
+
     }
 
     function setURI(string memory newuri) public onlyOwner {
         _setURI(newuri);
     }
 
-    function mint(address account_address, uint256 id, uint256 amount, bytes memory data)
+    function mint(address account_address, uint256 id)
         public
-        onlyOwner
     { 
-        _mint(account_address, id, amount, data);
+        Cat memory newcat = Cat(id, account_address, block.timestamp, 0, 0, true);
+        _mint(msg.sender, id, 1, "cat");
+        tokenMutableData[id] = newcat;
+        newcat.healthPointPercentage_18digits = get_health_point_percentage_or_burn(id);
     }
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
@@ -60,12 +55,8 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         bytes memory data
     ) public virtual override{
         require(balanceOf(from, id) == 1, "Insufficient balance for token ID");
-        if (tokenMutableData[id].lock_status == false){
-            tokenMutableData[id].lock_status = true;
-            super.safeTransferFrom(from, to, id, amount, data);
-        }else{
-            revert("your NFT still locked");
-        }
+        require(tokenMutableData[id].lock_status == false, "The transaction pay still not done yet.");
+        super.safeTransferFrom(from, to, id, amount, data);
     }
     
     function check_batch_lock (uint[] memory ids, bool status) private view returns(bool){
@@ -83,12 +74,13 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     }
 
     function unlock_payment(uint id) public payable{
-        address payable recipient = payable(owner()); // Get the address and cast it to payable
+        emit Received(msg.sender,msg.value,"the lock is update");
         require(msg.value >= transactionfee, "Insufficient bid.");
-        require(recipient.send(msg.value)); // Problematic part: Transfer value
         tokenMutableData[id].lock_status == false;
     }
 
+    /*
+    //expected it doesn't work porperly.
     function unlock_transfer( address from,
         address to,
         uint256 id,
@@ -100,9 +92,10 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
             safeTransferFrom(from, to, id, amount, data); //transfer
             return tokenMutableData[id].lock_status;
     }
+    */
 
     function uri(uint256 id) override public view returns (string memory) {
-        require(id <= nft_amounts, "The required ID is exceed this contract owned.");
+        require(tokenMutableData[id].adopter_address != address(0), "The required ID is not this contract owned.");
         return string(
             abi.encodePacked(
                 "https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone",
@@ -129,11 +122,14 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         if(percentage <= 0){
             _burn(tokenMutableData[id].adopter_address, id, 1);
         }
-
         return percentage;
     }
     function divide(uint256 a, uint256 b) private pure returns(uint256 int_one_to_digits18 ) {
         assert(b != 0);
         return (a * 1e18) / b;
+    }
+    
+    function get_token_adopter(uint id) public view returns(address adopter){
+        return tokenMutableData[id].adopter_address;
     }
 }
