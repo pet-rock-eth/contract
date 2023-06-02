@@ -18,7 +18,9 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         bool live_status;
     }
 
+    uint256 mintid = 0;
     uint256 transactionfee = 0.001 ether;
+    mapping (address => uint256[]) address_to_stone;
     mapping (uint256 => Stone) private tokenMutableData; //id:stone
     event Received(address _sender, uint _value, string _message);
 
@@ -30,14 +32,16 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         _setURI(newuri);
     }
 
-    function mint(address account_address, uint256 id)
+    function mint(address account_address)
         public
     {
-        require(get_adopt_time(id) == 0 ,"this NFT has already mint");
-        Stone memory newstone = Stone(id, account_address, block.timestamp, 0, 0, true, true);
-        _mint(msg.sender, id, 1, "stone");
-        tokenMutableData[id] = newstone;
-        newstone.healthPointPercentage_18digits = get_health_point_percentage_or_burn(id);
+        require(mintid <= 100,"the mint is end");
+        mintid += 1;
+        Stone memory newstone = Stone(mintid, account_address, block.timestamp, 0, 0, true, true);
+        _mint(msg.sender, mintid, 1, "stone");
+        tokenMutableData[mintid] = newstone;
+        newstone.healthPointPercentage_18digits = get_health_point_percentage_or_burn(mintid);
+        address_to_stone[account_address].push(mintid);
     }
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
@@ -46,6 +50,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     {
         for (uint i=0 ; i<ids.length ; i++){
             require(get_adopt_time(ids[i]) == 0 ,"this NFT has already mint");
+            require(ids[i] <= 100 ,"the id is too big");
         }
         _mintBatch(to, ids, amounts, data);
     }
@@ -62,6 +67,8 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         require(balanceOf(from, id) == 1, "Insufficient amount for token ID");
         require(tokenMutableData[id].lock_status == false, "The transaction pay still not done yet.");
         super.safeTransferFrom(from, to, id, amount, data);
+        address_to_stone[to].push(id);
+        delete address_to_stone[from][findstone_arrayposition(from,id)];
         tokenMutableData[id].lock_status = true;
     }
     
@@ -79,16 +86,24 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         }
     }
 
+    function get_lock_status(uint id) public view returns(bool){
+        if(tokenMutableData[id].lock_status == true){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
     function check_locked (uint id) public view returns(bool){
         require(tokenMutableData[id].lock_status == true,"your NFT status isn't correct.");
         return true;
     }
 
     function unlock_payment(uint id) public payable{
-        emit Received(msg.sender,msg.value,"the lock is update");
         require(msg.value >= transactionfee, "Insufficient bid.");
         require(tokenMutableData[id].lock_status == true, "the NFT already unlock");
-        tokenMutableData[id].lock_status == false;
+        emit Received(msg.sender,msg.value,"the lock is update");
+        tokenMutableData[id].lock_status = false;
     }
 
     /*
@@ -147,5 +162,17 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     
     function get_token_adopter(uint id) public view returns(address adopter){
         return tokenMutableData[id].adopter_address;
+    }
+
+    function findstone(address account) public view returns(uint256[] memory){
+        return address_to_stone[account];
+    }
+
+    function findstone_arrayposition(address account,uint256 id) private view returns(uint256 position){
+        for (uint256 i=0 ; i < findstone(account).length ; i++){
+            if(address_to_stone[account][i] == id){
+                return i;
+            }
+        }
     }
 }
