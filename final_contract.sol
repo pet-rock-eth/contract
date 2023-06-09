@@ -179,4 +179,9 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     function get_struct(uint id) public view returns(Stone memory){
         return tokenMutableData[id];
     }
+
+    function die(uint id) public returns(bool){
+        tokenMutableData[id].live_status=false;
+        return tokenMutableData[id].live_status;
+    }
 }
