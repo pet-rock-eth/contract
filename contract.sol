@@ -24,7 +24,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     mapping (uint256 => Stone) private tokenMutableData; //id:stone
     event Received(address _sender, uint _value, string _message);
 
-    constructor() ERC1155("https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone{id}.json") {
+    constructor() ERC1155("https://pet-rock-eth.pancake.tw/nft/{id}.json") {
 
     }
 
