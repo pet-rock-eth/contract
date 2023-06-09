@@ -184,4 +184,10 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         tokenMutableData[id].live_status=false;
         return tokenMutableData[id].live_status;
     }
+
+    function left_stone_number()public view returns(uint){
+        uint number =100;
+        number -= mintid;
+        return number;
+    }
 }
