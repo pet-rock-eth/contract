@@ -125,7 +125,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         require(tokenMutableData[id].adopter_address != address(0), "The required ID is not this contract owned.");
         return string(
             abi.encodePacked(
-                "https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone",
+                "https://pet-rock-eth.pancake.tw/nft/",
                 Strings.toString(id),".json"
             )
         );
