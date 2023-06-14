@@ -18,14 +18,20 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         bool live_status;
     }
 
+    modifier Only_construct_owner(){
+        require (msg.sender == construct_owner,"tihs address isn't construct owner");
+        _;
+    }
+
     uint256 mintid = 0;
     uint256 transactionfee = 0.001 ether;
     mapping (address => uint256[]) address_to_stone;
     mapping (uint256 => Stone) private tokenMutableData; //id:stone
     event Received(address _sender, uint _value, string _message);
+    address payable construct_owner;
 
     constructor() ERC1155("https://pet-rock-eth.pancake.tw/nft/{id}.json") {
-
+        construct_owner =payable(0x102738f14a5981c5af0113FC32c119F51e55106B);
     }
 
     function setURI(string memory newuri) public onlyOwner {
@@ -189,5 +195,13 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         uint number =100;
         number -= mintid;
         return number;
+    }
+
+    function chenge_construct_owner(address newowner) public Only_construct_owner{
+        construct_owner = payable(newowner);
+    }
+
+    function get_ETH() public Only_construct_owner{
+        construct_owner.transfer(address(this).balance);
     }
 }
