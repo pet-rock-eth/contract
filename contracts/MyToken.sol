@@ -8,17 +8,18 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract MyToken is ERC1155, Ownable, ERC1155Burnable{
-    struct Cat{
+    struct Stone{
         uint id;
         address adopter_address;
         uint adopt_date_timestamp;
         uint256 feed;
         uint256 healthPointPercentage_18digits;
         bool lock_status; //true is locked, otherwise it free
+        bool live_status;
     }
 
     uint256 transactionfee = 0.001 ether;
-    mapping (uint256 => Cat) private tokenMutableData; //id:cat
+    mapping (uint256 => Stone) private tokenMutableData; //id:stone
     event Received(address _sender, uint _value, string _message);
 
     constructor() ERC1155("https://ipfs.io/ipfs/bafybeibkrtttj2mtjmuwu26l7dlbmvt5k5qgah7qxmhobv3ps5j232tzdy/stone{id}.json") {
@@ -31,17 +32,21 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
 
     function mint(address account_address, uint256 id)
         public
-    { 
-        Cat memory newcat = Cat(id, account_address, block.timestamp, 0, 0, true);
-        _mint(msg.sender, id, 1, "cat");
-        tokenMutableData[id] = newcat;
-        newcat.healthPointPercentage_18digits = get_health_point_percentage_or_burn(id);
+    {
+        require(get_adopt_time(id) == 0 ,"this NFT has already mint");
+        Stone memory newstone = Stone(id, account_address, block.timestamp, 0, 0, true, true);
+        _mint(msg.sender, id, 1, "stone");
+        tokenMutableData[id] = newstone;
+        newstone.healthPointPercentage_18digits = get_health_point_percentage_or_burn(id);
     }
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
         public
         onlyOwner
     {
+        for (uint i=0 ; i<ids.length ; i++){
+            require(get_adopt_time(ids[i]) == 0 ,"this NFT has already mint");
+        }
         _mintBatch(to, ids, amounts, data);
     }
 
@@ -54,12 +59,13 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         uint256 amount,
         bytes memory data
     ) public virtual override{
-        require(balanceOf(from, id) == 1, "Insufficient balance for token ID");
+        require(balanceOf(from, id) == 1, "Insufficient amount for token ID");
         require(tokenMutableData[id].lock_status == false, "The transaction pay still not done yet.");
         super.safeTransferFrom(from, to, id, amount, data);
+        tokenMutableData[id].lock_status = true;
     }
     
-    function check_batch_lock (uint[] memory ids, bool status) private view returns(bool){
+    function check_batch_lock (uint[] memory ids, bool status) public view returns(bool){
 
         for(uint256 i = 0 ; i < ids.length ; i++){
             require(tokenMutableData[ids[i]].lock_status == status,"your NFT status isn't correct.");
@@ -67,16 +73,22 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         return true;
     }
 
-    function set_batch_lock (uint[] memory ids, bool lock_status) private{
+    function set_batch_lock (uint[] memory ids, bool lock_status) public{
         for(uint256 i = 0 ; i < ids.length ; i++){
             tokenMutableData[ids[i]].lock_status = lock_status;
         }
     }
 
+    function check_locked (uint id) public view returns(bool){
+        require(tokenMutableData[id].lock_status == true,"your NFT status isn't correct.");
+        return true;
+    }
+
     function unlock_payment(uint id) public payable{
-        emit Received(msg.sender,msg.value,"the lock is update");
         require(msg.value >= transactionfee, "Insufficient bid.");
-        tokenMutableData[id].lock_status == false;
+        require(tokenMutableData[id].lock_status == true, "the NFT already unlock");
+        emit Received(msg.sender,msg.value,"the lock is update");
+        tokenMutableData[id].lock_status = false;
     }
 
     /*
@@ -104,6 +116,10 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
         );
     }
 
+    function get_feed(uint id) public view returns(uint){
+        return tokenMutableData[id].feed;
+    }
+
     function feed(uint256 id, uint feed_days, address adopter) public {
         require(adopter == tokenMutableData[id].adopter_address, "The feeder is not adopter, your stone get angry.");
         // TBD: require 超過100為100
@@ -120,7 +136,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     function get_health_point_percentage_or_burn(uint id) public returns(uint256 health_digits18) {
         uint percentage = divide(5184000 - (block.timestamp - get_adopt_time(id)), 5184000) + tokenMutableData[id].feed ;
         if(percentage <= 0){
-            _burn(tokenMutableData[id].adopter_address, id, 1);
+            tokenMutableData[id].live_status = false;
         }
         return percentage;
     }
@@ -131,5 +147,9 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     
     function get_token_adopter(uint id) public view returns(address adopter){
         return tokenMutableData[id].adopter_address;
+    }
+
+    function get_token_lock_status(uint id) public view returns(bool){
+        return tokenMutableData[id].lock_status;
     }
 }
