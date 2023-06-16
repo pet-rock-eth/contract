@@ -41,7 +41,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     function mint(address account_address)
         public
     {
-        require(mintid <= 100,"the mint is end");
+        require(mintid < 100,"the mint is end");
         mintid += 1;
         Stone memory newstone = Stone(mintid, account_address, block.timestamp, 0, 0, true, true);
         _mint(msg.sender, mintid, 1, "stone");
@@ -142,6 +142,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Burnable{
     }
 
     function feed(uint256 id, uint feed_days, address adopter) public {
+        require(divide(5184000 - (block.timestamp - get_adopt_time(id)), 5184000) + tokenMutableData[id].feed > 0,"This stone already die");
         require(adopter == tokenMutableData[id].adopter_address, "The feeder is not adopter, your stone get angry.");
         // TBD: require 超過100為100
         // 604800 -> 7天
